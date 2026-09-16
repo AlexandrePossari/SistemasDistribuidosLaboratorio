@@ -8,6 +8,7 @@ HOST := 0.0.0.0
 PORT := 8000
 
 .PHONY: help install run dev shell lock update clean \
+        test test-v test-k \
         build up down restart logs ps sh db-shell rebuild health
 
 help:
@@ -21,6 +22,11 @@ help:
 	@echo "  make lock     - Atualiza o arquivo poetry.lock"
 	@echo "  make update   - Atualiza as dependencias do projeto"
 	@echo "  make clean    - Remove caches Python"
+	@echo ""
+	@echo " Testes (Pytest):"
+	@echo "  make test     - Roda a suite de testes do backend"
+	@echo "  make test-v   - Roda os testes em modo verboso"
+	@echo "  make test-k   - Roda testes filtrados por expressao (K=nome)"
 	@echo ""
 	@echo " Docker:"
 	@echo "  make build    - Constroi as imagens do docker compose"
@@ -54,6 +60,16 @@ update:
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type d -name ".pytest_cache" -exec rm -rf {} +
+
+test:
+	cd $(BACKEND_DIR) && $(POETRY) run pytest
+
+test-v:
+	cd $(BACKEND_DIR) && $(POETRY) run pytest -v
+
+test-k:
+	cd $(BACKEND_DIR) && $(POETRY) run pytest -v -k "$(K)"
 
 build:
 	$(COMPOSE) build
