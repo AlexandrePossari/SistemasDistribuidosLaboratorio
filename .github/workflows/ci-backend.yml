@@ -1,0 +1,50 @@
+name: CI Backend
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-backend.yml"
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-backend.yml"
+
+jobs:
+  tests:
+    name: Testes (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Instala o Poetry
+        run: pipx install poetry==2.4.1
+
+      - name: Configura o Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+
+      - name: Valida o poetry.lock
+        run: poetry check --lock
+
+      - name: Instala as dependencias
+        run: poetry install --no-root --with dev
+
+      - name: Executa os testes
+        run: poetry run pytest -v
