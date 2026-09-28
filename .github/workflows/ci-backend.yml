@@ -46,5 +46,8 @@ jobs:
       - name: Instala as dependencias
         run: poetry install --no-root --with dev
 
-      - name: Executa os testes
-        run: poetry run pytest -v
+      - name: Executa os testes unitarios
+        run: poetry run pytest -v tests/unit
+
+      - name: Executa os testes de integracao
+        run: poetry run pytest -v tests/integration
