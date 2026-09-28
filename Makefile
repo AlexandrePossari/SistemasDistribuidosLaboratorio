@@ -3,12 +3,12 @@ COMPOSE := docker compose
 BACKEND_DIR := backend
 BACKEND_SERVICE := backend
 DB_SERVICE := db
-APP := src.main:app
+APP := app.main:app
 HOST := 0.0.0.0
 PORT := 8000
 
 .PHONY: help install run dev shell lock update clean \
-        test test-v test-k \
+        test test-v test-k test-unit test-integration \
         build up down restart logs ps sh db-shell rebuild health
 
 help:
@@ -27,6 +27,8 @@ help:
 	@echo "  make test     - Roda a suite de testes do backend"
 	@echo "  make test-v   - Roda os testes em modo verboso"
 	@echo "  make test-k   - Roda testes filtrados por expressao (K=nome)"
+	@echo "  make test-unit        - Roda apenas os testes unitarios"
+	@echo "  make test-integration - Roda apenas os testes de integracao"
 	@echo ""
 	@echo " Docker:"
 	@echo "  make build    - Constroi as imagens do docker compose"
@@ -70,6 +72,12 @@ test-v:
 
 test-k:
 	cd $(BACKEND_DIR) && $(POETRY) run pytest -v -k "$(K)"
+
+test-unit:
+	cd $(BACKEND_DIR) && $(POETRY) run pytest -v tests/unit
+
+test-integration:
+	cd $(BACKEND_DIR) && $(POETRY) run pytest -v tests/integration
 
 build:
 	$(COMPOSE) build
