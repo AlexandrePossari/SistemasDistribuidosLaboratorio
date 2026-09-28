@@ -1,10 +1,7 @@
 from collections.abc import Callable
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
-
-from src.main import divisao, soma
 
 
 @pytest.mark.parametrize(
@@ -70,19 +67,6 @@ def test_operacoes_rejeitam_parametro_nao_numerico(client: TestClient, rota: str
 @pytest.mark.parametrize(("a", "b"), [(1, 2), (-4, 9), (0.5, 0.25)])
 def test_soma_e_comutativa(somar: Callable, a: float, b: float) -> None:
     assert somar(a, b).json() == somar(b, a).json()
-
-
-def test_funcoes_de_operacao_sem_camada_http() -> None:
-    assert soma(2, 3) == {"resultado": 5}
-    assert divisao(9, 3) == {"resultado": 3.0}
-
-
-def test_divisao_levanta_erro_sem_camada_http() -> None:
-    with pytest.raises(HTTPException) as excinfo:
-        divisao(1, 0)
-
-    assert excinfo.value.status_code == 400
-    assert excinfo.value.detail == "Divisao por zero nao e permitida"
 
 
 @pytest.mark.parametrize("rota", ["/soma", "/divisao"])

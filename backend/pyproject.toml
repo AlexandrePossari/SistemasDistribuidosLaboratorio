@@ -23,7 +23,11 @@ httpx2 = "^2.13.0"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: testes unitarios (sem camada HTTP)",
+    "integration: testes de integracao via TestClient",
+]
 
 
 [build-system]
