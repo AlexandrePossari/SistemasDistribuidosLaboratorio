@@ -1,28 +1,21 @@
-from collections.abc import Callable
+from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
-from src.main import app
-
-
-@pytest.fixture(scope="session")
-def client() -> TestClient:
-    with TestClient(app) as test_client:
-        yield test_client
+TESTS_DIR = Path(__file__).parent
+SUITES = ("unit", "integration")
 
 
-@pytest.fixture
-def somar(client: TestClient) -> Callable:
-    def _somar(a: object, b: object):
-        return client.get("/soma", params={"a": a, "b": b})
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Marca cada teste como unit ou integration conforme a pasta em que ele esta.
 
-    return _somar
-
-
-@pytest.fixture
-def dividir(client: TestClient) -> Callable:
-    def _dividir(a: object, b: object):
-        return client.get("/divisao", params={"a": a, "b": b})
-
-    return _dividir
+    Testes fora dessas pastas sao recusados, para que o CI (que roda cada suite
+    separadamente) nunca deixe algum teste de fora.
+    """
+    for item in items:
+        suite = item.path.relative_to(TESTS_DIR).parts[0]
+        if suite not in SUITES:
+            raise pytest.UsageError(
+                f"{item.nodeid}: todo teste deve ficar em tests/unit/ ou tests/integration/"
+            )
+        item.add_marker(getattr(pytest.mark, suite))
