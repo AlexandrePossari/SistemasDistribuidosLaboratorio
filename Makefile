@@ -8,8 +8,10 @@ HOST := 0.0.0.0
 PORT := 8000
 
 .PHONY: help install run dev shell lock update clean \
+        format lint \
         test test-v test-k test-unit test-integration \
-        build up down restart logs ps sh db-shell rebuild health
+        migrate migration downgrade db-current \
+        build up up-build down restart logs ps sh db-shell rebuild health
 
 help:
 	@echo "Comandos disponiveis:"
@@ -23,16 +25,27 @@ help:
 	@echo "  make update   - Atualiza as dependencias do projeto"
 	@echo "  make clean    - Remove caches Python"
 	@echo ""
+	@echo " Qualidade (Ruff):"
+	@echo "  make format   - Formata o codigo e organiza os imports"
+	@echo "  make lint     - Verifica lint e formatacao (sem alterar arquivos)"
+	@echo ""
 	@echo " Testes (Pytest):"
-	@echo "  make test     - Roda a suite de testes do backend"
+	@echo "  make test     - Roda a suite de testes do backend (exige o PostgreSQL: make up)"
 	@echo "  make test-v   - Roda os testes em modo verboso"
 	@echo "  make test-k   - Roda testes filtrados por expressao (K=nome)"
 	@echo "  make test-unit        - Roda apenas os testes unitarios"
-	@echo "  make test-integration - Roda apenas os testes de integracao"
+	@echo "  make test-integration - Roda apenas os testes de integracao (exige o PostgreSQL)"
+	@echo ""
+	@echo " Migrations (Alembic):"
+	@echo "  make migrate          - Aplica as migrations pendentes (alembic upgrade head)"
+	@echo "  make migration M=msg  - Gera uma nova migration a partir dos modelos ORM"
+	@echo "  make downgrade        - Desfaz a ultima migration"
+	@echo "  make db-current       - Mostra a revisao atual do banco"
 	@echo ""
 	@echo " Docker:"
 	@echo "  make build    - Constroi as imagens do docker compose"
 	@echo "  make up       - Sobe backend e banco em background"
+	@echo "  make up-build - Reconstroi as imagens e sobe tudo em background"
 	@echo "  make down     - Derruba os servicos e remove os containers"
 	@echo "  make restart  - Reinicia os servicos"
 	@echo "  make rebuild  - Reconstroi as imagens sem cache e sobe tudo"
@@ -63,6 +76,15 @@ update:
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
+	find . -type d -name ".ruff_cache" -exec rm -rf {} +
+
+format:
+	cd $(BACKEND_DIR) && $(POETRY) run ruff check --fix .
+	cd $(BACKEND_DIR) && $(POETRY) run ruff format .
+
+lint:
+	cd $(BACKEND_DIR) && $(POETRY) run ruff check .
+	cd $(BACKEND_DIR) && $(POETRY) run ruff format --check .
 
 test:
 	cd $(BACKEND_DIR) && $(POETRY) run pytest
@@ -79,11 +101,26 @@ test-unit:
 test-integration:
 	cd $(BACKEND_DIR) && $(POETRY) run pytest -v tests/integration
 
+migrate:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic upgrade head
+
+migration:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic revision --autogenerate -m "$(M)"
+
+downgrade:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic downgrade -1
+
+db-current:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic current
+
 build:
 	$(COMPOSE) build
 
 up:
 	$(COMPOSE) up -d
+
+up-build:
+	$(COMPOSE) up -d --build
 
 down:
 	$(COMPOSE) down
