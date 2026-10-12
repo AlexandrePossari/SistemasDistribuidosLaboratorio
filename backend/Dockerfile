@@ -17,9 +17,12 @@ RUN pip install "poetry==${POETRY_VERSION}"
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --no-root --without dev
 
-# Codigo da aplicacao
+# Codigo da aplicacao e migrations
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY app ./app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Aplica as migrations pendentes antes de subir a API
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
