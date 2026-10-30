@@ -6,7 +6,9 @@ Repositório para a disciplina de Sistemas Distribuídos - 2026.2
 
 ```
 .
-├── .github/workflows/ci-backend.yml   # Pipeline de CI do backend (lint + testes)
+├── .github/workflows/
+│   ├── ci-backend.yml                 # Pipeline de CI do backend (lint + testes)
+│   └── ci-frontend.yml                # Pipeline de CI do frontend (lint + testes)
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                    # Apenas inicializa a aplicação FastAPI
@@ -27,6 +29,24 @@ Repositório para a disciplina de Sistemas Distribuídos - 2026.2
 │   ├── alembic.ini                    # Configuração do Alembic
 │   ├── pyproject.toml                 # Dependências e configuração do Pytest e do Ruff
 │   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── main.jsx                   # Ponto de entrada: monta o React no #root
+│   │   ├── App.jsx                    # Layout da aplicação
+│   │   ├── index.css                  # Apenas @import "tailwindcss"
+│   │   ├── pages/                     # Páginas (CarsPage guarda o estado dos carros)
+│   │   ├── components/                # Componentes reutilizáveis (formulário, lista, filtro)
+│   │   └── utils/                     # Funções puras: validação, filtro e formatação
+│   ├── tests/
+│   │   ├── setup.js                   # jest-dom + cleanup do Testing Library
+│   │   ├── unit/                      # Funções puras e componentes isolados (*.test.js[x])
+│   │   ├── integration/               # Formulário + filtro + lista juntos (*.test.jsx)
+│   │   └── e2e/                       # Fluxos no navegador com Playwright (*.spec.js)
+│   ├── index.html
+│   ├── package.json                   # Dependências e scripts npm
+│   ├── vite.config.js                 # Vite, plugins React/Tailwind e config do Vitest
+│   ├── playwright.config.js           # Navegador, servidor e relatórios dos testes E2E
+│   └── biome.json                     # Regras de lint e formatação do Biome
 ├── docker-compose.yml                 # Backend + PostgreSQL
 └── Makefile                           # Atalhos de desenvolvimento
 ```
@@ -173,16 +193,80 @@ poetry run pytest -m integration
 poetry run pytest tests/integration/test_cars_api.py::test_criar_carro_retorna_201_com_id_gerado
 ```
 
+## Frontend
+
+SPA em **React** com **Vite**, escrita em JavaScript puro e estilizada com **Tailwind CSS v4**
+(via plugin do Vite, sem `tailwind.config.js`). A tela gerencia carros com os mesmos campos e
+regras do backend (`marca`, `modelo`, `ano` entre 1886 e 2100, `cor` e `preco` > 0): cadastrar,
+filtrar por marca e remover.
+
+Nesta etapa o estado é **apenas local** (`useState`): não há chamadas à API nem persistência,
+então os dados voltam aos carros de exemplo ao recarregar a página. A integração com o backend
+e o Docker ficam para a próxima prática.
+
+| Ferramenta | Papel | Equivalente no backend |
+|------------|-------|------------------------|
+| npm | Dependências e scripts | Poetry |
+| Biome | Lint + formatação + ordem dos imports | Ruff |
+| Vitest + Testing Library + jsdom | Testes unitários e de integração | Pytest + TestClient |
+| Playwright (Chromium) | Testes E2E em navegador real | — |
+
+### Pré-requisitos
+
+- Node.js 22.12+ (o CI usa o Node 26) e npm
+
+### Executando
+
+```bash
+make front-install      # npm ci
+make front-dev          # Vite em http://localhost:5173
+make front-build        # build de produção em frontend/dist
+make front-preview      # serve o build localmente
+```
+
+### Qualidade de código (Biome)
+
+```bash
+make front-format       # biome check --write: formata, organiza imports e aplica correções seguras
+make front-lint         # biome check: verifica tudo sem alterar arquivos
+```
+
+Dentro de `frontend/` também existem `npm run lint` (só regras de lint) e
+`npm run format:check` (só formatação). A configuração fica em
+[frontend/biome.json](frontend/biome.json).
+
+### Testes
+
+| Suíte | Pasta | Ferramenta | Comando |
+|-------|-------|------------|---------|
+| Unitários | `tests/unit/` | Vitest + Testing Library | `make front-test-unit` |
+| Integração | `tests/integration/` | Vitest + Testing Library + user-event | `make front-test-integration` |
+| E2E | `tests/e2e/` | Playwright | `make front-test-e2e` |
+
+- Os arquivos do Vitest seguem o padrão `nome.test.js` / `nome.test.jsx`; os do Playwright,
+  `nome.spec.js`. O `include` do Vitest em `vite.config.js` aponta só para `unit/` e
+  `integration/`, para que ele não tente executar os specs do Playwright.
+- `make front-test` roda unitários e de integração juntos.
+- Antes do primeiro E2E, instale o navegador com `make front-e2e-install`. O Playwright
+  sobe o servidor do Vite sozinho (`webServer` em `playwright.config.js`) e gera o
+  relatório HTML em `frontend/playwright-report/`.
+
 ## Checklist antes do PR
 
 ```bash
 make format
 make lint
 make test
+make front-format
+make front-lint
+make front-test
+make front-test-e2e
 make up-build
 ```
 
 ## CI (GitHub Actions)
+
+### Backend
 
 O workflow [.github/workflows/ci-backend.yml](.github/workflows/ci-backend.yml) roda
 automaticamente em **push** e em **pull request** para qualquer branch, sempre que algo
@@ -203,3 +287,22 @@ em `backend/` ou o próprio workflow mudar. Ele tem dois jobs:
 6. execução dos testes unitários (`poetry run pytest -v tests/unit`);
 7. aplicação das migrations (`poetry run alembic upgrade head`);
 8. execução dos testes de integração (`poetry run pytest -v tests/integration`).
+
+### Frontend
+
+O workflow [.github/workflows/ci-frontend.yml](.github/workflows/ci-frontend.yml) roda em
+**push** e **pull request** para qualquer branch quando algo em `frontend/` ou o próprio
+workflow mudar. Os dois jobs usam Node.js 26 com cache do npm e `npm ci`:
+
+**Lint e formatação (Biome)**
+
+1. `npm run check` (lint, formatação e ordem dos imports, sem alterar arquivos).
+
+**Testes**, que só roda se o job de lint passar (`needs: lint`):
+
+1. testes unitários (`npm run test:unit`);
+2. testes de integração (`npm run test:integration`);
+3. build de produção (`npm run build`);
+4. instalação do Chromium (`npx playwright install --with-deps chromium`);
+5. testes E2E (`npm run test:e2e`);
+6. publicação do relatório do Playwright como artefato.
