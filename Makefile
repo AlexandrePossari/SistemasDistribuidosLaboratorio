@@ -1,6 +1,8 @@
 POETRY := poetry
 COMPOSE := docker compose
 BACKEND_DIR := backend
+FRONTEND_DIR := frontend
+NPM := npm
 BACKEND_SERVICE := backend
 DB_SERVICE := db
 APP := app.main:app
@@ -11,7 +13,9 @@ PORT := 8000
         format lint \
         test test-v test-k test-unit test-integration \
         migrate migration downgrade db-current \
-        build up up-build down restart logs ps sh db-shell rebuild health
+        build up up-build down restart logs ps sh db-shell rebuild health \
+        front-install front-dev front-build front-preview front-format front-lint \
+        front-test front-test-unit front-test-integration front-e2e-install front-test-e2e
 
 help:
 	@echo "Comandos disponiveis:"
@@ -41,6 +45,19 @@ help:
 	@echo "  make migration M=msg  - Gera uma nova migration a partir dos modelos ORM"
 	@echo "  make downgrade        - Desfaz a ultima migration"
 	@echo "  make db-current       - Mostra a revisao atual do banco"
+	@echo ""
+	@echo " Frontend (npm):"
+	@echo "  make front-install          - Instala as dependencias do frontend (npm ci)"
+	@echo "  make front-dev              - Roda o Vite em modo desenvolvimento (http://localhost:5173)"
+	@echo "  make front-build            - Gera o build de producao em frontend/dist"
+	@echo "  make front-preview          - Serve o build de producao localmente"
+	@echo "  make front-format           - Formata o codigo e organiza os imports (Biome)"
+	@echo "  make front-lint             - Verifica lint, formatacao e imports (sem alterar arquivos)"
+	@echo "  make front-test             - Roda os testes unitarios e de integracao (Vitest)"
+	@echo "  make front-test-unit        - Roda apenas os testes unitarios"
+	@echo "  make front-test-integration - Roda apenas os testes de integracao"
+	@echo "  make front-e2e-install      - Instala o Chromium usado pelo Playwright"
+	@echo "  make front-test-e2e         - Roda os testes E2E (Playwright)"
 	@echo ""
 	@echo " Docker:"
 	@echo "  make build    - Constroi as imagens do docker compose"
@@ -112,6 +129,39 @@ downgrade:
 
 db-current:
 	cd $(BACKEND_DIR) && $(POETRY) run alembic current
+
+front-install:
+	cd $(FRONTEND_DIR) && $(NPM) ci
+
+front-dev:
+	cd $(FRONTEND_DIR) && $(NPM) run dev
+
+front-build:
+	cd $(FRONTEND_DIR) && $(NPM) run build
+
+front-preview:
+	cd $(FRONTEND_DIR) && $(NPM) run preview
+
+front-format:
+	cd $(FRONTEND_DIR) && $(NPM) run format
+
+front-lint:
+	cd $(FRONTEND_DIR) && $(NPM) run check
+
+front-test:
+	cd $(FRONTEND_DIR) && $(NPM) run test
+
+front-test-unit:
+	cd $(FRONTEND_DIR) && $(NPM) run test:unit
+
+front-test-integration:
+	cd $(FRONTEND_DIR) && $(NPM) run test:integration
+
+front-e2e-install:
+	cd $(FRONTEND_DIR) && $(NPM) run test:e2e:install
+
+front-test-e2e:
+	cd $(FRONTEND_DIR) && $(NPM) run test:e2e
 
 build:
 	$(COMPOSE) build
