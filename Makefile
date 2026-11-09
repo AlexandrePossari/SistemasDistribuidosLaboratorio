@@ -11,7 +11,7 @@ PORT := 8000
 
 .PHONY: help install run dev shell lock update clean \
         format lint \
-        test test-v test-k test-unit test-integration \
+        test test-v test-k test-unit test-integration test-all \
         migrate migration downgrade db-current \
         build up up-build down restart logs ps sh db-shell rebuild health \
         front-install front-dev front-build front-preview front-format front-lint \
@@ -40,6 +40,9 @@ help:
 	@echo "  make test-unit        - Roda apenas os testes unitarios"
 	@echo "  make test-integration - Roda apenas os testes de integracao (exige o PostgreSQL)"
 	@echo ""
+	@echo " Todos os testes:"
+	@echo "  make test-all - Sobe a stack e roda backend (Pytest), frontend (Vitest) e E2E (Playwright)"
+	@echo ""
 	@echo " Migrations (Alembic):"
 	@echo "  make migrate          - Aplica as migrations pendentes (alembic upgrade head)"
 	@echo "  make migration M=msg  - Gera uma nova migration a partir dos modelos ORM"
@@ -57,12 +60,13 @@ help:
 	@echo "  make front-test-unit        - Roda apenas os testes unitarios"
 	@echo "  make front-test-integration - Roda apenas os testes de integracao"
 	@echo "  make front-e2e-install      - Instala o Chromium usado pelo Playwright"
-	@echo "  make front-test-e2e         - Roda os testes E2E (Playwright)"
+	@echo "  make front-test-e2e         - Roda os testes E2E (Playwright; exige a stack: make up)"
 	@echo ""
 	@echo " Docker:"
 	@echo "  make build    - Constroi as imagens do docker compose"
-	@echo "  make up       - Sobe backend e banco em background"
+	@echo "  make up       - Sobe banco, backend e frontend em background"
 	@echo "  make up-build - Reconstroi as imagens e sobe tudo em background"
+	@echo "                  (frontend em http://localhost:5173, API em http://localhost:8000)"
 	@echo "  make down     - Derruba os servicos e remove os containers"
 	@echo "  make restart  - Reinicia os servicos"
 	@echo "  make rebuild  - Reconstroi as imagens sem cache e sobe tudo"
@@ -162,6 +166,14 @@ front-e2e-install:
 
 front-test-e2e:
 	cd $(FRONTEND_DIR) && $(NPM) run test:e2e
+
+# Sobe a stack (o PostgreSQL atende o Pytest; a API e o Vite atendem o Playwright)
+# e roda todas as suites de teste em sequencia.
+test-all:
+	$(COMPOSE) up -d --build --wait
+	$(MAKE) test
+	$(MAKE) front-test
+	$(MAKE) front-test-e2e
 
 build:
 	$(COMPOSE) build
