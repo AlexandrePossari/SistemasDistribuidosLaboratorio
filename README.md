@@ -11,8 +11,9 @@ Repositório para a disciplina de Sistemas Distribuídos - 2026.2
 │   └── ci-frontend.yml                # Pipeline de CI do frontend (lint + testes)
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                    # Apenas inicializa a aplicação FastAPI
+│   │   ├── main.py                    # Inicializa a aplicação FastAPI (CORS + routers)
 │   │   ├── api/
+│   │   │   ├── cors.py                # CORS: origens explícitas lidas de CORS_ORIGINS
 │   │   │   ├── router.py              # Agrega os routers
 │   │   │   └── routes/                # Endpoints HTTP (cars, operacoes, health)
 │   │   ├── schemas/                   # Schemas Pydantic (entrada/saída da API)
@@ -34,20 +35,23 @@ Repositório para a disciplina de Sistemas Distribuídos - 2026.2
 │   │   ├── main.jsx                   # Ponto de entrada: monta o React no #root
 │   │   ├── App.jsx                    # Layout da aplicação
 │   │   ├── index.css                  # Apenas @import "tailwindcss"
-│   │   ├── pages/                     # Páginas (CarsPage guarda o estado dos carros)
-│   │   ├── components/                # Componentes reutilizáveis (formulário, lista, filtro)
-│   │   └── utils/                     # Funções puras: validação, filtro e formatação
+│   │   ├── pages/                     # Páginas (CarsPage carrega e altera os carros pela API)
+│   │   ├── components/                # Componentes reutilizáveis (formulário, lista, item, filtro)
+│   │   ├── services/                  # Chamadas HTTP: api.js (cliente) e cars.js (endpoints /cars)
+│   │   └── utils/                     # Funções puras: validação e formatação
 │   ├── tests/
 │   │   ├── setup.js                   # jest-dom + cleanup do Testing Library
-│   │   ├── unit/                      # Funções puras e componentes isolados (*.test.js[x])
-│   │   ├── integration/               # Formulário + filtro + lista juntos (*.test.jsx)
-│   │   └── e2e/                       # Fluxos no navegador com Playwright (*.spec.js)
+│   │   ├── unit/                      # Funções, serviços (fetch mockado) e componentes isolados
+│   │   ├── integration/               # Página inteira com o serviço de carros mockado
+│   │   └── e2e/                       # Fluxos no navegador contra a stack real (*.spec.js)
 │   ├── index.html
 │   ├── package.json                   # Dependências e scripts npm
 │   ├── vite.config.js                 # Vite, plugins React/Tailwind e config do Vitest
-│   ├── playwright.config.js           # Navegador, servidor e relatórios dos testes E2E
-│   └── biome.json                     # Regras de lint e formatação do Biome
-├── docker-compose.yml                 # Backend + PostgreSQL
+│   ├── playwright.config.js           # Navegador, servidores e relatórios dos testes E2E
+│   ├── biome.json                     # Regras de lint e formatação do Biome
+│   ├── .env.example                   # VITE_API_URL para rodar o Vite fora do Docker
+│   └── Dockerfile
+├── docker-compose.yml                 # PostgreSQL + backend + frontend
 └── Makefile                           # Atalhos de desenvolvimento
 ```
 
@@ -83,8 +87,18 @@ cp .env.example .env
 | `POSTGRES_*`        | Usuário, senha, banco e porta do container do PostgreSQL |
 | `DATABASE_URL`      | Conexão da aplicação e do Alembic (ex.: `postgresql+psycopg://postgres:postgres@localhost:5432/sistemas_distribuidos`) |
 | `TEST_DATABASE_URL` | Banco usado pelos testes de integração (padrão: `sistemas_distribuidos_test`) |
+| `BACKEND_PORT`      | Porta publicada da API (padrão `8000`) |
+| `FRONTEND_PORT`     | Porta publicada do frontend (padrão `5173`) |
+| `CORS_ORIGINS`      | Origens que o navegador pode usar para chamar a API, separadas por vírgula. `*` é recusado |
+| `VITE_API_URL`      | URL da API usada pelo frontend (padrão `http://localhost:${BACKEND_PORT}`) |
 
 Dentro do Docker Compose, o backend recebe `DATABASE_URL` apontando para o host `db`.
+
+`VITE_API_URL` é a URL da API **vista pelo navegador**, que roda na máquina do usuário e
+não dentro da rede do Compose. Por isso ela usa `localhost` e a porta publicada, e não o
+host `backend`. Se alguma porta padrão já estiver em uso por outro projeto, basta trocar
+`BACKEND_PORT` e/ou `FRONTEND_PORT` no `.env`: sem `VITE_API_URL` e `CORS_ORIGINS`
+definidos, o Compose deriva os dois dessas portas.
 
 ## Instalação
 
@@ -100,14 +114,27 @@ de produção e o grupo `dev` (Pytest, cliente HTTP de teste e Ruff).
 ### Com Docker Compose (recomendado)
 
 ```bash
-make up-build   # constrói a imagem e sobe PostgreSQL + API em http://localhost:8000
+make up-build   # constrói as imagens e sobe os 3 serviços
 make logs       # acompanha os logs
 make down       # derruba os containers (os dados continuam no volume postgres_data)
 ```
 
+| Serviço    | Container     | Endereço |
+|------------|---------------|----------|
+| `db`       | `sd-db`       | PostgreSQL em `localhost:5432` |
+| `backend`  | `sd-backend`  | API em http://localhost:8000 (Swagger em `/docs`) |
+| `frontend` | `sd-frontend` | Aplicação em http://localhost:5173 |
+
+Os serviços sobem em cascata com `depends_on` + healthcheck: o backend só inicia depois
+que o PostgreSQL está saudável, e o frontend só depois que a API responde.
+
 Ao subir, o container do backend executa `alembic upgrade head` antes do Uvicorn,
 então o banco sempre está com todas as migrations aplicadas. Os dados ficam no volume
 `postgres_data` e permanecem após reiniciar a API ou recriar os containers.
+
+O frontend roda o servidor de desenvolvimento do Vite com `frontend/src` montado como
+volume. `VITE_WATCH_POLLING` liga o polling de arquivos, para o hot reload funcionar
+também no Windows e no macOS.
 
 ### Localmente
 
@@ -145,6 +172,20 @@ Os dados são persistidos na tabela `cars` do PostgreSQL.
 | DELETE | `/cars/{car_id}` | path `car_id`                      | 204 sem corpo · 404 |
 
 A documentação interativa fica em `http://localhost:8000/docs`.
+
+### CORS
+
+O frontend (porta 5173) e a API (porta 8000) são **origens diferentes**, então o navegador
+só deixa o frontend ler as respostas da API se ela autorizar essa origem. O
+`CORSMiddleware` é configurado em [backend/app/api/cors.py](backend/app/api/cors.py):
+
+- **origens explícitas**, lidas de `CORS_ORIGINS`. Sem a variável, o padrão é
+  `http://localhost:5173` e `http://127.0.0.1:5173`. O curinga `*` é recusado na
+  inicialização;
+- métodos `GET`, `POST`, `PUT`, `PATCH` e `DELETE`, e o header `Content-Type`;
+- sem credenciais (`allow_credentials=False`).
+
+O CORS é uma regra do navegador: `curl` e o `TestClient` não são bloqueados por ele.
 
 ## Qualidade de código
 
@@ -197,12 +238,46 @@ poetry run pytest tests/integration/test_cars_api.py::test_criar_carro_retorna_2
 
 SPA em **React** com **Vite**, escrita em JavaScript puro e estilizada com **Tailwind CSS v4**
 (via plugin do Vite, sem `tailwind.config.js`). A tela gerencia carros com os mesmos campos e
-regras do backend (`marca`, `modelo`, `ano` entre 1886 e 2100, `cor` e `preco` > 0): cadastrar,
-filtrar por marca e remover.
+regras do backend (`marca`, `modelo`, `ano` entre 1886 e 2100, `cor` e `preco` > 0).
 
-Nesta etapa o estado é **apenas local** (`useState`): não há chamadas à API nem persistência,
-então os dados voltam aos carros de exemplo ao recarregar a página. A integração com o backend
-e o Docker ficam para a próxima prática.
+### Integração com a API
+
+Os dados vêm do backend, e não mais de um estado local:
+
+```
+CarsPage / componentes  →  services/cars.js  →  services/api.js (fetch)  →  FastAPI  →  PostgreSQL
+```
+
+- [services/cars.js](frontend/src/services/cars.js) reúne todas as chamadas da entidade
+  carro e espelha cada endpoint do backend. Uma nova entidade ganharia o seu próprio módulo
+  em `services/`.
+
+  | Função            | Endpoint              | Uso na tela |
+  |-------------------|-----------------------|-------------|
+  | `listarCarros`    | `GET /cars?marca=&limite=` | Lista ao abrir a página, busca por marca e "Tentar novamente" |
+  | `obterCarro`      | `GET /cars/{id}`      | "Editar" busca a versão atual antes de preencher o formulário |
+  | `criarCarro`      | `POST /cars`          | "Cadastrar" |
+  | `substituirCarro` | `PUT /cars/{id}`      | "Salvar alterações" na edição |
+  | `atualizarCarro`  | `PATCH /cars/{id}`    | "Preço": altera só o preço |
+  | `removerCarro`    | `DELETE /cars/{id}`   | "Remover" |
+
+- [services/api.js](frontend/src/services/api.js) tem a função `request`, que trata os
+  três cenários de uma requisição:
+  1. **API inacessível** (o `fetch` rejeita): `ApiError` com status `0` e a mensagem
+     "Não foi possível conectar à API. Verifique se o backend está rodando.";
+  2. **resposta de erro** (4xx/5xx): `ApiError` com o status e o `detail` do FastAPI. Os
+     erros de validação 422 viram `campo: mensagem`;
+  3. **sucesso**: o JSON da resposta, ou `null` no `204` do DELETE.
+- A página mostra **mensagens de erro e de sucesso** para cada operação: falha ao
+  carregar a lista (com botão "Tentar novamente"), ao cadastrar, salvar, alterar o preço
+  e remover. Se a API responder `404` (carro removido em outra aba, por exemplo), a lista
+  é recarregada.
+- O formulário faz uma **validação inicial** com as mesmas regras do schema `CarBase`,
+  para não enviar dados que a API recusaria. A validação que vale é a do backend.
+- Depois de cada alteração, a lista é buscada de novo, para mostrar exatamente o que
+  está no banco.
+- O filtro usa o `?marca=` da API, que compara a **marca exata** (sem diferenciar
+  maiúsculas).
 
 | Ferramenta | Papel | Equivalente no backend |
 |------------|-------|------------------------|
@@ -217,7 +292,12 @@ e o Docker ficam para a próxima prática.
 
 ### Executando
 
+Pelo Docker Compose (`make up-build`), o frontend já sobe junto com a API e o banco. Para
+rodar o Vite direto na máquina:
+
 ```bash
+cp frontend/.env.example frontend/.env   # VITE_API_URL=http://localhost:8000
+make up                 # a API e o banco precisam estar no ar
 make front-install      # npm ci
 make front-dev          # Vite em http://localhost:5173
 make front-build        # build de produção em frontend/dist
@@ -243,25 +323,45 @@ Dentro de `frontend/` também existem `npm run lint` (só regras de lint) e
 | Integração | `tests/integration/` | Vitest + Testing Library + user-event | `make front-test-integration` |
 | E2E | `tests/e2e/` | Playwright | `make front-test-e2e` |
 
+- **Unitários**: validação, formatação, o cliente `request` (com o `fetch` mockado,
+  cobrindo sucesso, `204`, API fora do ar, `404`, `422` e corpo que não é JSON), o
+  serviço de carros (cada função chama o endpoint e o método certos) e os componentes
+  isolados.
+- **Integração**: a `CarsPage` inteira (formulário, filtro, lista e avisos) com o módulo
+  `services/cars.js` mockado. Assim os testes cobrem a integração entre os componentes e
+  as chamadas à API sem depender do backend nem do banco.
+- **E2E**: usam a **stack real** (navegador → Vite → FastAPI → PostgreSQL). Eles cobrem o
+  CRUD completo pela interface, a persistência após recarregar a página, o `404` devolvido
+  pela API, a validação do formulário e a mensagem quando a API está fora do ar
+  (simulada com `page.route`). Cada teste usa uma marca única (`E2E-...`) e apaga pela API
+  o que cadastrou, então os dados que já estão no banco não são afetados.
 - Os arquivos do Vitest seguem o padrão `nome.test.js` / `nome.test.jsx`; os do Playwright,
   `nome.spec.js`. O `include` do Vitest em `vite.config.js` aponta só para `unit/` e
   `integration/`, para que ele não tente executar os specs do Playwright.
 - `make front-test` roda unitários e de integração juntos.
-- Antes do primeiro E2E, instale o navegador com `make front-e2e-install`. O Playwright
-  sobe o servidor do Vite sozinho (`webServer` em `playwright.config.js`) e gera o
-  relatório HTML em `frontend/playwright-report/`.
+- Antes do primeiro E2E, instale o navegador com `make front-e2e-install` e suba a stack
+  com `make up`: o Playwright reaproveita a API e o Vite que já estão rodando. No CI, ele
+  mesmo sobe os dois (`webServer` em `playwright.config.js`). O relatório HTML fica em
+  `frontend/playwright-report/`.
+
+## Todos os testes em um comando
+
+```bash
+make test-all
+```
+
+Sobe a stack com `docker compose up -d --build --wait` e roda, em sequência, os testes do
+backend (Pytest: unitários e integração), os do frontend (Vitest: unitários e integração)
+e os E2E (Playwright).
 
 ## Checklist antes do PR
 
 ```bash
 make format
 make lint
-make test
 make front-format
 make front-lint
-make front-test
-make front-test-e2e
-make up-build
+make test-all
 ```
 
 ## CI (GitHub Actions)
@@ -291,18 +391,22 @@ em `backend/` ou o próprio workflow mudar. Ele tem dois jobs:
 ### Frontend
 
 O workflow [.github/workflows/ci-frontend.yml](.github/workflows/ci-frontend.yml) roda em
-**push** e **pull request** para qualquer branch quando algo em `frontend/` ou o próprio
-workflow mudar. Os dois jobs usam Node.js 26 com cache do npm e `npm ci`:
+**push** e **pull request** para qualquer branch quando algo em `frontend/`, em `backend/`
+(os E2E usam a API real) ou no próprio workflow mudar. Os dois jobs usam Node.js 26 com
+cache do npm e `npm ci`:
 
 **Lint e formatação (Biome)**
 
 1. `npm run check` (lint, formatação e ordem dos imports, sem alterar arquivos).
 
-**Testes**, que só roda se o job de lint passar (`needs: lint`):
+**Testes**, que só roda se o job de lint passar (`needs: lint`), com um PostgreSQL 16 como
+*service container*:
 
 1. testes unitários (`npm run test:unit`);
 2. testes de integração (`npm run test:integration`);
 3. build de produção (`npm run build`);
-4. instalação do Chromium (`npx playwright install --with-deps chromium`);
-5. testes E2E (`npm run test:e2e`);
-6. publicação do relatório do Playwright como artefato.
+4. instalação do Poetry e do Python 3.12 e das dependências do backend;
+5. migrations no banco do E2E (`alembic upgrade head`);
+6. instalação do Chromium (`npx playwright install --with-deps chromium`);
+7. testes E2E (`npm run test:e2e`): o Playwright sobe a API e o Vite e testa a stack real;
+8. publicação do relatório do Playwright como artefato.
