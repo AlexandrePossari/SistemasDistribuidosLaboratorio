@@ -5,11 +5,15 @@ on:
     branches: ["**"]
     paths:
       - "frontend/**"
+      # Os testes E2E usam a API real: mudancas no backend tambem disparam este workflow.
+      - "backend/**"
       - ".github/workflows/ci-frontend.yml"
   pull_request:
     branches: ["**"]
     paths:
       - "frontend/**"
+      # Os testes E2E usam a API real: mudancas no backend tambem disparam este workflow.
+      - "backend/**"
       - ".github/workflows/ci-frontend.yml"
 
 jobs:
@@ -45,6 +49,28 @@ jobs:
     # Os testes so rodam se o lint e a formatacao passarem.
     needs: lint
 
+    # Stack real para os testes E2E: o Playwright sobe a API (Poetry) e o Vite,
+    # e a API usa este PostgreSQL.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sistemas_distribuidos_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sistemas_distribuidos_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/sistemas_distribuidos_e2e
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      VITE_API_URL: http://localhost:8000
+
     defaults:
       run:
         working-directory: frontend
@@ -72,10 +98,29 @@ jobs:
       - name: Gera o build de producao
         run: npm run build
 
+      - name: Instala o Poetry
+        run: pipx install poetry==2.4.1
+
+      - name: Configura o Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+
+      - name: Instala as dependencias do backend
+        working-directory: backend
+        run: poetry install --no-root --without dev
+
+      - name: Aplica as migrations no banco do E2E
+        working-directory: backend
+        run: poetry run alembic upgrade head
+
       - name: Instala o Chromium do Playwright
         run: npx playwright install --with-deps chromium
 
-      - name: Executa os testes E2E
+      # O Playwright sobe a API e o Vite (webServer em playwright.config.js).
+      - name: Executa os testes E2E (frontend + API + PostgreSQL)
         run: npm run test:e2e
 
       - name: Publica o relatorio do Playwright
