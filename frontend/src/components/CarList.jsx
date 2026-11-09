@@ -1,6 +1,6 @@
-import { formatarPreco } from "../utils/cars.js";
+import CarItem from "./CarItem.jsx";
 
-export default function CarList({ carros, onRemove }) {
+export default function CarList({ carros, onEdit, onUpdatePrice, onRemove }) {
   if (carros.length === 0) {
     return (
       <p className="rounded-lg bg-white p-6 text-slate-500 shadow-sm">Nenhum carro encontrado.</p>
@@ -10,27 +10,13 @@ export default function CarList({ carros, onRemove }) {
   return (
     <ul aria-label="Carros cadastrados" className="space-y-3">
       {carros.map((carro) => (
-        <li
+        <CarItem
           key={carro.id}
-          className="flex items-center justify-between rounded-lg bg-white p-4 shadow-sm"
-        >
-          <div>
-            <p className="font-semibold text-slate-800">
-              {carro.marca} {carro.modelo}
-            </p>
-            <p className="text-sm text-slate-500">
-              {carro.ano} · {carro.cor} · {formatarPreco(carro.preco)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onRemove(carro.id)}
-            aria-label={`Remover ${carro.marca} ${carro.modelo}`}
-            className="rounded-md px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
-          >
-            Remover
-          </button>
-        </li>
+          carro={carro}
+          onEdit={onEdit}
+          onUpdatePrice={onUpdatePrice}
+          onRemove={onRemove}
+        />
       ))}
     </ul>
   );

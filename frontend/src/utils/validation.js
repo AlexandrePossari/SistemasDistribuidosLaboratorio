@@ -38,7 +38,7 @@ function validarAno(valor) {
   return null;
 }
 
-function validarPreco(valor) {
+export function validarPreco(valor) {
   const texto = String(valor ?? "").trim();
   if (texto === "") {
     return "Preço é obrigatório.";
