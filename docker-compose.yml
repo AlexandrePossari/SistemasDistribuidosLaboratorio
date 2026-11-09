@@ -29,14 +29,44 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-sistemas_distribuidos}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-sistemas_distribuidos}
+      # Origens do frontend liberadas no CORS (explicitas; "*" e recusado pelo backend)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173}}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend/app:/app/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ./backend/alembic:/app/alembic
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
       db:
+        condition: service_healthy
+    networks:
+      - sd-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sd-frontend
+    restart: unless-stopped
+    environment:
+      # URL da API vista pelo navegador do usuario (porta publicada do backend)
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:${BACKEND_PORT:-8000}}
+      # Hot reload do src/ montado como volume (eventos de arquivo nao chegam ao container)
+      VITE_WATCH_POLLING: "true"
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/src
+    depends_on:
+      backend:
         condition: service_healthy
     networks:
       - sd-network

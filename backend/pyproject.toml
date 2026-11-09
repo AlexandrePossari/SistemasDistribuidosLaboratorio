@@ -5,19 +5,23 @@ description = "Sistemas Distribuidos - Backend"
 authors = [
     {name = "Alexandre Possari"}
 ]
-requires-python = "^3.12"
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "fastapi (>=0.141.1,<0.142.0)",
     "uvicorn[standard] (>=0.52.3,<0.53.0)",
     "pydantic (>=2.13.4,<3.0.0)",
     "python-dotenv (>=1.2.3,<2.0.0)",
-    "requests (>=2.34.2,<3.0.0)"
+    "requests (>=2.34.2,<3.0.0)",
+    "sqlalchemy (>=2.1.4,<3.0.0)",
+    "psycopg[binary] (>=3.3.6,<4.0.0)",
+    "alembic (>=1.20.0,<2.0.0)"
 ]
 
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
 httpx2 = "^2.13.0"
+ruff = "^0.17.0"
 
 
 [tool.pytest.ini_options]
@@ -28,6 +32,18 @@ markers = [
     "unit: testes unitarios (sem camada HTTP)",
     "integration: testes de integracao via TestClient",
 ]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# A pasta alembic/ (migrations) faria o ruff tratar o pacote alembic como local
+known-third-party = ["alembic"]
 
 
 [build-system]

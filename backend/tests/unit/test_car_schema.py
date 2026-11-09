@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from app.models.car import CarModel
 from app.schemas.car import ANO_MAXIMO, ANO_MINIMO, Car, CarCreate, CarPatch
 
 
@@ -32,7 +33,9 @@ def test_car_create_aceita_limites_de_ano(dados_validos: dict, ano: int) -> None
         ("cor", ""),
     ],
 )
-def test_car_create_rejeita_valores_invalidos(dados_validos: dict, campo: str, valor: object) -> None:
+def test_car_create_rejeita_valores_invalidos(
+    dados_validos: dict, campo: str, valor: object
+) -> None:
     with pytest.raises(ValidationError) as excinfo:
         CarCreate(**{**dados_validos, campo: valor})
 
@@ -56,3 +59,9 @@ def test_car_patch_valida_campos_enviados() -> None:
 def test_car_patch_rejeita_campos_desconhecidos() -> None:
     with pytest.raises(ValidationError):
         CarPatch(placa="ABC1234")
+
+
+def test_car_e_montado_a_partir_do_modelo_orm(dados_validos: dict) -> None:
+    modelo = CarModel(id=7, **dados_validos)
+
+    assert Car.model_validate(modelo) == Car(id=7, **dados_validos)

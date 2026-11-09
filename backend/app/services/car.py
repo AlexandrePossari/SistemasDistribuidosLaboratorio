@@ -1,41 +1,42 @@
+from app.models.car import CarModel
+from app.repositories.car import CarRepository
 from app.schemas.car import Car, CarCreate, CarPatch, CarUpdate
 
-# Sem banco de dados por enquanto: o servico apenas monta e devolve valores.
-CARROS_EXEMPLO: tuple[Car, ...] = (
-    Car(id=1, marca="Toyota", modelo="Corolla", ano=2024, cor="Prata", preco=150000.0),
-    Car(id=2, marca="Honda", modelo="Civic", ano=2023, cor="Preto", preco=140000.0),
-    Car(id=3, marca="Toyota", modelo="Yaris", ano=2022, cor="Branco", preco=95000.0),
-    Car(id=4, marca="Volkswagen", modelo="Golf", ano=2021, cor="Azul", preco=120000.0),
-)
 
-ID_NOVO_CARRO = 1
+class CarroNaoEncontradoError(LookupError):
+    def __init__(self, car_id: int) -> None:
+        super().__init__(f"Carro {car_id} nao encontrado")
+        self.car_id = car_id
 
 
-def listar_carros(marca: str | None = None, limite: int = 10) -> list[Car]:
-    carros = CARROS_EXEMPLO
-    if marca is not None:
-        carros = tuple(carro for carro in carros if carro.marca.lower() == marca.lower())
-    return list(carros[:limite])
+class CarService:
+    def __init__(self, repository: CarRepository) -> None:
+        self.repository = repository
 
+    def listar_carros(self, marca: str | None = None, limite: int = 10) -> list[Car]:
+        carros = self.repository.listar(marca=marca, limite=limite)
+        return [Car.model_validate(carro) for carro in carros]
 
-def obter_carro(car_id: int) -> Car:
-    base = CARROS_EXEMPLO[0]
-    return base.model_copy(update={"id": car_id})
+    def obter_carro(self, car_id: int) -> Car:
+        return Car.model_validate(self._buscar(car_id))
 
+    def criar_carro(self, dados: CarCreate) -> Car:
+        return Car.model_validate(self.repository.criar(dados.model_dump()))
 
-def criar_carro(dados: CarCreate) -> Car:
-    return Car(id=ID_NOVO_CARRO, **dados.model_dump())
+    def substituir_carro(self, car_id: int, dados: CarUpdate) -> Car:
+        carro = self.repository.atualizar(self._buscar(car_id), dados.model_dump())
+        return Car.model_validate(carro)
 
+    def atualizar_carro(self, car_id: int, dados: CarPatch) -> Car:
+        alteracoes = dados.model_dump(exclude_unset=True, exclude_none=True)
+        carro = self.repository.atualizar(self._buscar(car_id), alteracoes)
+        return Car.model_validate(carro)
 
-def substituir_carro(car_id: int, dados: CarUpdate) -> Car:
-    return Car(id=car_id, **dados.model_dump())
+    def remover_carro(self, car_id: int) -> None:
+        self.repository.remover(self._buscar(car_id))
 
-
-def atualizar_carro(car_id: int, dados: CarPatch) -> Car:
-    atual = obter_carro(car_id)
-    alteracoes = dados.model_dump(exclude_unset=True, exclude_none=True)
-    return atual.model_copy(update=alteracoes)
-
-
-def remover_carro(car_id: int) -> None:
-    return None
+    def _buscar(self, car_id: int) -> CarModel:
+        carro = self.repository.obter(car_id)
+        if carro is None:
+            raise CarroNaoEncontradoError(car_id)
+        return carro

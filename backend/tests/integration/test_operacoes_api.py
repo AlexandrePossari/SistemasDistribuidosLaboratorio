@@ -48,9 +48,7 @@ def test_divisao_por_zero_retorna_400(dividir: Callable, a: float) -> None:
 
 @pytest.mark.parametrize("rota", ["/soma", "/divisao"])
 @pytest.mark.parametrize("params", [{}, {"a": 1}, {"b": 2}])
-def test_operacoes_exigem_os_dois_parametros(
-    client: TestClient, rota: str, params: dict
-) -> None:
+def test_operacoes_exigem_os_dois_parametros(client: TestClient, rota: str, params: dict) -> None:
     response = client.get(rota, params=params)
 
     assert response.status_code == 422
