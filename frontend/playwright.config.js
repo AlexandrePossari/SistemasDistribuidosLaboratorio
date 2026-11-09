@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = 5173;
 const BASE_URL = `http://localhost:${PORT}`;
+const API_URL = process.env.VITE_API_URL ?? "http://localhost:8000";
 const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
@@ -23,11 +24,22 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  // Sobe o servidor do Vite antes dos testes e o derruba ao final.
-  webServer: {
-    command: "npm run dev",
-    url: BASE_URL,
-    reuseExistingServer: !isCI,
-    timeout: 60_000,
-  },
+  // Os testes E2E usam a stack real: navegador -> Vite -> FastAPI -> PostgreSQL.
+  // Localmente, com `make up` rodando, os servidores do docker compose sao reaproveitados.
+  // No CI, o Playwright sobe a API (com o PostgreSQL do workflow) e o Vite.
+  webServer: [
+    {
+      command: "poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000",
+      cwd: "../backend",
+      url: `${API_URL}/`,
+      reuseExistingServer: !isCI,
+      timeout: 60_000,
+    },
+    {
+      command: "npm run dev",
+      url: BASE_URL,
+      reuseExistingServer: !isCI,
+      timeout: 60_000,
+    },
+  ],
 });
