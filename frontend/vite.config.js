@@ -7,6 +7,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // No container, o src/ e montado como volume e (no Windows/macOS) o Vite nao recebe
+    // eventos de alteracao de arquivo: o compose liga VITE_WATCH_POLLING para o hot reload.
+    watch: process.env.VITE_WATCH_POLLING === "true" ? { usePolling: true, interval: 300 } : {},
   },
   test: {
     environment: "jsdom",

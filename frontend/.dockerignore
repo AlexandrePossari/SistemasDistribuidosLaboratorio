@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Dependencias e build (instaladas/geradas dentro da imagem)
+node_modules/
+dist/
+
+# Testes
+playwright-report/
+test-results/
+blob-report/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Ambiente
+.env
+.env.*
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
