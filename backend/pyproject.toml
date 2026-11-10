@@ -1,0 +1,49 @@
+[project]
+name = "minha-biblioteca-backend"
+version = "0.1.0"
+description = "Minha Biblioteca - API de acompanhamento de leituras"
+authors = [
+    {name = "Alexandre Possari"}
+]
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "fastapi (>=0.162.3,<0.163.0)",
+    "uvicorn[standard] (>=0.54.0,<0.55.0)",
+    "python-dotenv (>=1.2.4,<2.0.0)",
+    "sqlalchemy (>=2.1.8,<3.0.0)",
+    "psycopg[binary] (>=3.3.8,<4.0.0)"
+]
+
+
+[tool.poetry]
+# Aplicacao (nao biblioteca publicavel): o Poetry so gerencia as dependencias.
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.2.0,<10.0.0)",
+    "ruff (>=0.17.4,<0.18.0)",
+    "httpx2 (>=2.16.0,<3.0.0)"
+]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: testes unitarios (sem HTTP e sem banco)",
+    "integration: testes de integracao (TestClient + PostgreSQL)",
+]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
