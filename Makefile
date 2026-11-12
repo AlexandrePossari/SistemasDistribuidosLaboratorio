@@ -10,6 +10,7 @@ PORT := 8000
 .PHONY: help install run dev clean \
         format lint \
         test test-v test-unit test-integration \
+        migrate migration downgrade db-current db-history \
         build up up-build down restart rebuild logs ps sh db-shell health
 
 help:
@@ -30,6 +31,13 @@ help:
 	@echo "  make test-v           - Roda os testes em modo verboso"
 	@echo "  make test-unit        - Roda apenas os testes unitarios (sem banco)"
 	@echo "  make test-integration - Roda apenas os testes de integracao (exige o PostgreSQL)"
+	@echo ""
+	@echo " Migrations (Alembic):"
+	@echo "  make migrate          - Aplica as migrations pendentes (alembic upgrade head)"
+	@echo "  make migration M=msg  - Gera uma migration a partir dos modelos (autogenerate)"
+	@echo "  make downgrade        - Desfaz a ultima migration"
+	@echo "  make db-current       - Mostra a migration atual do banco"
+	@echo "  make db-history       - Lista o historico de migrations"
 	@echo ""
 	@echo " Docker Compose:"
 	@echo "  make build            - Constroi as imagens"
@@ -77,6 +85,21 @@ test-unit:
 
 test-integration:
 	cd $(BACKEND_DIR) && $(POETRY) run pytest -v tests/integration
+
+migrate:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic upgrade head
+
+migration:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic revision --autogenerate -m "$(M)"
+
+downgrade:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic downgrade -1
+
+db-current:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic current
+
+db-history:
+	cd $(BACKEND_DIR) && $(POETRY) run alembic history
 
 build:
 	$(COMPOSE) build
