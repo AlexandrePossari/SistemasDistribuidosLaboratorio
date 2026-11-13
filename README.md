@@ -11,8 +11,9 @@ avaliar os livros concluídos.
 A aplicação é composta por uma API em FastAPI, um banco PostgreSQL e um frontend em React,
 executados juntos com Docker Compose.
 
-> Nesta etapa está pronto o backend: a API de livros com as regras de leitura, o banco
-> PostgreSQL com migrations, os testes e o CI. O frontend vem nas próximas etapas.
+> Nesta etapa estão prontos o backend (API, banco com migrations, testes e CI) e o
+> frontend em React consumindo a API. O frontend ainda roda fora do Docker (`make
+> front-dev`); o container dele e os testes E2E vêm na próxima etapa.
 
 ## Funcionalidades
 
@@ -23,6 +24,21 @@ executados juntos com Docker Compose.
   por um trecho do título ou do autor.
 - Editar todos os dados de um livro ou só o status, a avaliação ou as notas.
 - Excluir livros.
+- Ver um resumo com a quantidade de livros em cada status.
+
+Na interface, tudo fica numa página só:
+
+- **cabeçalho** com o resumo (Quero ler · Lendo · Lido);
+- **formulário** para adicionar e editar. O campo de avaliação só aparece quando o status
+  é Lido;
+- **abas de status** (Todos, Quero ler, Lendo, Lido) e **busca** por título ou autor;
+- **cartões** dos livros com ações rápidas:
+  - seletor de status;
+  - estrelas para avaliar os livros lidos (clicar na nota atual remove a avaliação);
+  - notas longas recolhidas com "ver mais";
+  - Editar e Excluir, com confirmação na própria tela;
+- estados de **carregamento**, **lista vazia**, **erro ao carregar** (com "Tentar
+  novamente") e **avisos** de sucesso ou erro em cada ação.
 
 ### Regras de negócio
 
@@ -47,7 +63,9 @@ pelo banco, com CHECK constraints e um índice único em `lower(titulo), lower(a
 | Banco de dados | PostgreSQL 16, SQLAlchemy, Alembic (migrations), psycopg |
 | Dependências | Poetry |
 | Qualidade | Ruff (lint e formatação) |
-| Testes | Pytest + TestClient |
+| Frontend | React 19 (JavaScript), Vite, Tailwind CSS v4 |
+| Testes | Pytest + TestClient (backend), Vitest + Testing Library + jsdom (frontend) |
+| Qualidade do frontend | Biome (lint e formatação) |
 | Infraestrutura | Docker, Docker Compose, Makefile |
 | CI | GitHub Actions |
 
@@ -56,12 +74,14 @@ pelo banco, com CHECK constraints e um índice único em `lower(titulo), lower(a
 ```
 .
 ├── .github/workflows/
-│   └── ci-backend.yml           # CI do backend: lint e testes
+│   ├── ci-backend.yml           # CI do backend: lint e testes
+│   └── ci-frontend.yml          # CI do frontend: lint, testes e build
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # Cria a aplicação FastAPI, routers e tratadores de erro
 │   │   ├── api/
 │   │   │   ├── router.py        # Agrega os routers
+│   │   │   ├── cors.py          # CORS com as origens de CORS_ORIGINS
 │   │   │   ├── erros.py         # Erros de domínio -> respostas HTTP (404, 409, 422)
 │   │   │   └── routes/          # Endpoints HTTP (health, livros)
 │   │   ├── schemas/             # Schemas Pydantic (entrada e saída da API)
@@ -79,6 +99,19 @@ pelo banco, com CHECK constraints e um índice único em `lower(titulo), lower(a
 │   ├── pyproject.toml           # Dependências e configuração do Pytest e do Ruff
 │   ├── poetry.lock
 │   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── main.jsx             # Monta o React no #root
+│   │   ├── pages/               # BibliotecaPage: estado da tela e chamadas à API
+│   │   ├── components/          # Formulário, filtros, cartão, estrelas, resumo, avisos
+│   │   ├── services/            # api.js (cliente HTTP) e livros.js (endpoints /livros)
+│   │   └── utils/               # Validação do formulário e formatação (funções puras)
+│   ├── tests/
+│   │   ├── unit/                # Funções, serviços (fetch mockado) e componentes isolados
+│   │   └── integration/         # A página inteira com o serviço de livros mockado
+│   ├── package.json             # Dependências e scripts npm
+│   ├── vite.config.js           # Vite, plugins React/Tailwind e configuração do Vitest
+│   └── biome.json               # Regras de lint e formatação
 ├── docker-compose.yml           # PostgreSQL + API
 ├── .env.example                 # Variáveis de ambiente de exemplo
 └── Makefile                     # Comandos de execução, testes e manutenção
@@ -100,6 +133,7 @@ rota (api/routes)  →  service (services)  →  repository (repositories)  → 
 
 - Docker e Docker Compose
 - Make
+- Node.js 22.12+ e npm (frontend)
 - Para rodar o backend e os testes fora do Docker: Python 3.12 e
   [Poetry](https://python-poetry.org/docs/#installation) 2.x
 
@@ -119,6 +153,10 @@ cp .env.example .env
 | `BACKEND_PORT` | `8000` | Porta da API publicada na máquina |
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/biblioteca` | Conexão da API quando ela roda fora do Docker |
 | `TEST_DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/biblioteca_test` | Banco dos testes de integração |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Origens que o navegador pode usar para chamar a API, separadas por vírgula. `*` é recusado |
+
+O frontend tem o seu próprio exemplo, `frontend/.env.example`, com `VITE_API_URL`
+(padrão `http://localhost:8000`): a URL da API como o **navegador** a enxerga.
 
 Dentro do Docker Compose, a API recebe `DATABASE_URL` apontando para o serviço `db`.
 Se alguma porta já estiver em uso por outro projeto, troque `POSTGRES_PORT` ou
@@ -150,6 +188,17 @@ containers. O Compose usa o nome de projeto
 `minha-biblioteca`, então containers, rede e o volume `biblioteca_dados` são próprios
 deste projeto.
 
+### Frontend
+
+```bash
+make up                                  # a API e o banco precisam estar no ar
+cp frontend/.env.example frontend/.env   # VITE_API_URL=http://localhost:8000
+make front-install                       # npm ci
+make front-dev                           # Vite em http://localhost:5173
+```
+
+Para gerar e servir o build de produção: `make front-build` e `make front-preview`.
+
 ### API fora do Docker
 
 ```bash
@@ -176,13 +225,15 @@ título + autor.
 
 ## Acessando a API
 
-A documentação interativa (Swagger) fica em http://localhost:8000/docs.
+A interface fica em http://localhost:5173 (com `make front-dev`) e a documentação
+interativa da API (Swagger) em http://localhost:8000/docs.
 
 | Método | Rota | Uso | Respostas |
 |--------|------|-----|-----------|
 | GET | `/` | Nome da API e caminho da documentação | 200 |
 | GET | `/health` | API no ar e conexão com o banco | 200 · 503 |
 | GET | `/livros` | Lista, com os filtros abaixo | 200 · 422 |
+| GET | `/livros/resumo` | Quantidade de livros em cada status e o total | 200 |
 | GET | `/livros/{id}` | Um livro | 200 · 404 |
 | POST | `/livros` | Cadastra | 201 · 409 · 422 |
 | PUT | `/livros/{id}` | Edita todos os campos | 200 · 404 · 409 · 422 |
@@ -219,6 +270,38 @@ curl -X POST http://localhost:8000/livros \
 Os erros seguem o formato do FastAPI: `{"detail": "Livro 7 não encontrado"}`. Nos erros de
 validação (422), `detail` traz a lista de campos inválidos.
 
+### CORS
+
+O frontend (porta 5173) e a API (porta 8000) são origens diferentes, então o navegador só
+deixa o frontend ler as respostas se a API autorizar essa origem. O `CORSMiddleware`
+([backend/app/api/cors.py](backend/app/api/cors.py)) é configurado com:
+
+- **origens explícitas**, lidas de `CORS_ORIGINS`. O curinga `*` é recusado quando a API
+  sobe;
+- só os métodos usados pelo frontend (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) e o header
+  `Content-Type`;
+- sem credenciais.
+
+### Como o frontend chama a API
+
+```
+BibliotecaPage / componentes  →  services/livros.js  →  services/api.js (fetch)  →  API
+```
+
+`services/livros.js` tem uma função para cada endpoint. A função `request`, em
+`services/api.js`, trata os três cenários de uma requisição:
+
+1. **API inacessível** (o `fetch` falha): mensagem "Não foi possível conectar à API.
+   Verifique se o backend está rodando.";
+2. **resposta de erro** (404, 409, 422...): a mensagem do `detail` da API. Os erros de
+   validação viram `campo: mensagem`;
+3. **sucesso**: o JSON da resposta (ou nada, no 204 do DELETE).
+
+O formulário repete as validações do backend (campos obrigatórios, tamanhos, avaliação só
+em livro lido) para não enviar dados que a API recusaria, mas a validação que vale é a da
+API. Depois de cada alteração, a lista e o resumo são buscados de novo, para a tela
+mostrar exatamente o que está no banco.
+
 ```bash
 make health     # curl em /health
 ```
@@ -226,13 +309,18 @@ make health     # curl em /health
 ## Qualidade de código
 
 ```bash
-make format     # ruff check --fix + ruff format
-make lint       # ruff check + ruff format --check (não altera arquivos)
+make format         # backend: ruff check --fix + ruff format
+make lint           # backend: ruff check + ruff format --check (não altera arquivos)
+make front-format   # frontend: biome check --write (formata, organiza imports, corrige)
+make front-lint     # frontend: biome check (não altera arquivos)
 ```
 
-A configuração do Ruff fica em `[tool.ruff]` no [backend/pyproject.toml](backend/pyproject.toml).
+A configuração do Ruff fica em `[tool.ruff]` no [backend/pyproject.toml](backend/pyproject.toml)
+e a do Biome em [frontend/biome.json](frontend/biome.json).
 
 ## Testes
+
+### Backend (Pytest)
 
 Os testes ficam em [backend/tests/](backend/tests/), em duas suítes:
 
@@ -240,8 +328,9 @@ Os testes ficam em [backend/tests/](backend/tests/), em duas suítes:
   de negócio** do service, usando um repository em memória e uma data de "hoje" fixa, sem
   HTTP e sem banco;
 - **`tests/integration/`**: no PostgreSQL real, cobrem
-  - os 6 endpoints de livros via `TestClient`, incluindo filtros, busca, ordem e as
-    respostas 404, 409 e 422;
+  - os endpoints de livros via `TestClient`, incluindo filtros, busca, ordem, resumo e
+    as respostas 404, 409 e 422;
+  - o CORS: o preflight libera a origem do frontend e recusa uma origem desconhecida;
   - o repository, inclusive as CHECK constraints e o índice único recusando dados
     inválidos direto no banco;
   - as migrations: upgrade, downgrade e um teste que falha se um modelo mudar sem
@@ -261,7 +350,31 @@ make test-unit          # só os unitários (não precisam de banco)
 make test-integration   # só os de integração
 ```
 
+### Frontend (Vitest + Testing Library)
+
+Os testes ficam em [frontend/tests/](frontend/tests/) e seguem o padrão `nome.test.js` /
+`nome.test.jsx`:
+
+- **`tests/unit/`**:
+  - a validação do formulário e a formatação;
+  - o cliente `request`, com o `fetch` mockado: sucesso, 204, API fora do ar, erros com
+    `detail` e corpo que não é JSON;
+  - o serviço de livros (cada função chama o endpoint e o método certos);
+  - os componentes isolados, como o formulário (avaliação só em livro lido), o cartão
+    (status, estrelas, "ver mais", exclusão com confirmação) e os filtros;
+- **`tests/integration/`**: a página inteira com o serviço de livros mockado, cobrindo
+  carregamento, lista vazia, API fora do ar com "Tentar novamente", filtros, cadastro,
+  edição, ações rápidas, exclusão e as mensagens de erro da API (404, 409 e 422).
+
+```bash
+make front-test               # unitários + integração
+make front-test-unit          # só os unitários
+make front-test-integration   # só os de integração
+```
+
 ## CI (GitHub Actions)
+
+### Backend
 
 O workflow [.github/workflows/ci-backend.yml](.github/workflows/ci-backend.yml) roda em
 **push** e **pull request** para qualquer branch, sempre que algo em `backend/` ou o
@@ -277,5 +390,16 @@ próprio workflow mudar.
 2. migrations (`alembic upgrade head`);
 3. conferência de que modelos e migrations estão sincronizados (`alembic check`);
 4. testes de integração (`pytest tests/integration`).
+
+### Frontend
+
+O workflow [.github/workflows/ci-frontend.yml](.github/workflows/ci-frontend.yml) roda em
+**push** e **pull request** para qualquer branch, sempre que algo em `frontend/` ou o
+próprio workflow mudar. Os dois jobs usam Node.js 26 com cache do npm e `npm ci`.
+
+**Lint e formatação (Biome):** `npm run check` (lint, formatação e ordem dos imports).
+
+**Testes e build**, que só rodam se o lint passar (`needs: lint`): testes unitários,
+testes de integração e `npm run build`.
 
 Rode `make help` para ver todos os comandos.
