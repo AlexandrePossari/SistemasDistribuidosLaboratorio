@@ -1,6 +1,8 @@
 POETRY := poetry
 COMPOSE := docker compose
 BACKEND_DIR := backend
+FRONTEND_DIR := frontend
+NPM := npm
 API_SERVICE := api
 DB_SERVICE := db
 APP := app.main:app
@@ -11,6 +13,8 @@ PORT := 8000
         format lint \
         test test-v test-unit test-integration \
         migrate migration downgrade db-current db-history \
+        front-install front-dev front-build front-preview front-format front-lint \
+        front-test front-test-unit front-test-integration \
         build up up-build down restart rebuild logs ps sh db-shell health
 
 help:
@@ -38,6 +42,17 @@ help:
 	@echo "  make downgrade        - Desfaz a ultima migration"
 	@echo "  make db-current       - Mostra a migration atual do banco"
 	@echo "  make db-history       - Lista o historico de migrations"
+	@echo ""
+	@echo " Frontend (npm):"
+	@echo "  make front-install          - Instala as dependencias do frontend (npm ci)"
+	@echo "  make front-dev              - Roda o Vite em http://localhost:5173"
+	@echo "  make front-build            - Gera o build de producao em frontend/dist"
+	@echo "  make front-preview          - Serve o build de producao localmente"
+	@echo "  make front-format           - Formata, organiza imports e aplica correcoes (Biome)"
+	@echo "  make front-lint             - Verifica lint, formatacao e imports sem alterar arquivos"
+	@echo "  make front-test             - Roda os testes unitarios e de integracao (Vitest)"
+	@echo "  make front-test-unit        - Roda apenas os testes unitarios"
+	@echo "  make front-test-integration - Roda apenas os testes de integracao"
 	@echo ""
 	@echo " Docker Compose:"
 	@echo "  make build            - Constroi as imagens"
@@ -100,6 +115,33 @@ db-current:
 
 db-history:
 	cd $(BACKEND_DIR) && $(POETRY) run alembic history
+
+front-install:
+	cd $(FRONTEND_DIR) && $(NPM) ci
+
+front-dev:
+	cd $(FRONTEND_DIR) && $(NPM) run dev
+
+front-build:
+	cd $(FRONTEND_DIR) && $(NPM) run build
+
+front-preview:
+	cd $(FRONTEND_DIR) && $(NPM) run preview
+
+front-format:
+	cd $(FRONTEND_DIR) && $(NPM) run format
+
+front-lint:
+	cd $(FRONTEND_DIR) && $(NPM) run check
+
+front-test:
+	cd $(FRONTEND_DIR) && $(NPM) run test
+
+front-test-unit:
+	cd $(FRONTEND_DIR) && $(NPM) run test:unit
+
+front-test-integration:
+	cd $(FRONTEND_DIR) && $(NPM) run test:integration
 
 build:
 	$(COMPOSE) build
