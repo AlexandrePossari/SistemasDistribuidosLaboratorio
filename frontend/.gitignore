@@ -1,0 +1,13 @@
+# Dependencias
+node_modules/
+
+# Build do Vite
+dist/
+
+# Ambiente local
+.env
+.env.local
+
+# Logs
+npm-debug.log*
+*.log
