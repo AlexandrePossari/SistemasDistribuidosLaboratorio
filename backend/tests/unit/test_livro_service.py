@@ -38,6 +38,12 @@ class RepositorioEmMemoria:
         ]
         return sorted(livros, key=lambda livro: livro.criado_em, reverse=True)[:limite]
 
+    def contar_por_status(self) -> dict[str, int]:
+        contagem: dict[str, int] = {}
+        for livro in self.livros.values():
+            contagem[livro.status] = contagem.get(livro.status, 0) + 1
+        return contagem
+
     def obter(self, livro_id: int) -> LivroModel | None:
         return self.livros.get(livro_id)
 
@@ -284,6 +290,21 @@ def test_listar_traz_os_mais_recentes_primeiro(service: LivroService) -> None:
     _criar(service, titulo="Segundo")
 
     assert [livro.titulo for livro in service.listar_livros()] == ["Segundo", "Primeiro"]
+
+
+def test_resumo_conta_livros_por_status(service: LivroService) -> None:
+    _criar(service, titulo="A")
+    _criar(service, titulo="B", status="lendo")
+    _criar(service, titulo="C", status="lido")
+    _criar(service, titulo="D", status="lido")
+
+    resumo = service.resumo()
+
+    assert resumo.model_dump() == {"quero_ler": 1, "lendo": 1, "lido": 2, "total": 4}
+
+
+def test_resumo_sem_livros_zera_todos_os_status(service: LivroService) -> None:
+    assert service.resumo().model_dump() == {"quero_ler": 0, "lendo": 0, "lido": 0, "total": 0}
 
 
 def test_remover_apaga_o_livro(service: LivroService, repositorio: RepositorioEmMemoria) -> None:

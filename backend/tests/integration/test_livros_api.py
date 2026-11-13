@@ -196,6 +196,32 @@ def test_listar_recusa_parametros_invalidos(client: TestClient, params: dict) ->
     assert client.get("/livros", params=params).status_code == 422
 
 
+# GET /livros/resumo
+
+
+def test_resumo_conta_os_livros_por_status(
+    client: TestClient, cadastrar: Callable[..., dict]
+) -> None:
+    cadastrar(titulo="A")
+    cadastrar(titulo="B", status="lido")
+    cadastrar(titulo="C", status="lido")
+
+    response = client.get("/livros/resumo")
+
+    assert response.status_code == 200
+    assert response.json() == {"quero_ler": 1, "lendo": 0, "lido": 2, "total": 3}
+
+
+def test_resumo_ignora_filtros_da_listagem(
+    client: TestClient, cadastrar: Callable[..., dict]
+) -> None:
+    cadastrar(titulo="A", status="lendo")
+
+    response = client.get("/livros/resumo", params={"status": "lido"})
+
+    assert response.json()["total"] == 1
+
+
 # GET /livros/{id}
 
 
