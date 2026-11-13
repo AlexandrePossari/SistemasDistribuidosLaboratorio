@@ -83,6 +83,15 @@ class LivroPatch(BaseModel):
         return self
 
 
+class ResumoLeitura(BaseModel):
+    """Quantidade de livros em cada status de leitura."""
+
+    quero_ler: int
+    lendo: int
+    lido: int
+    total: int
+
+
 class Livro(LivroBase):
     """Livro como devolvido pela API."""
 

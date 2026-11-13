@@ -37,6 +37,11 @@ class LivroRepository:
         consulta = consulta.order_by(*mais_recentes_primeiro).limit(limite)
         return list(self.session.scalars(consulta))
 
+    def contar_por_status(self) -> dict[str, int]:
+        """Quantidade de livros por status (status sem livros nao aparecem)."""
+        consulta = select(LivroModel.status, func.count()).group_by(LivroModel.status)
+        return {status: quantidade for status, quantidade in self.session.execute(consulta)}
+
     def obter(self, livro_id: int) -> LivroModel | None:
         return self.session.get(LivroModel, livro_id)
 

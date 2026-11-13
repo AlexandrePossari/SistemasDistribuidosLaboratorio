@@ -4,7 +4,14 @@ from typing import Any
 
 from app.models.livro import LivroModel
 from app.repositories.livro import LivroRepository, TituloAutorDuplicadoError
-from app.schemas.livro import Livro, LivroCreate, LivroPatch, LivroUpdate, StatusLeitura
+from app.schemas.livro import (
+    Livro,
+    LivroCreate,
+    LivroPatch,
+    LivroUpdate,
+    ResumoLeitura,
+    StatusLeitura,
+)
 
 
 class LivroNaoEncontradoError(LookupError):
@@ -41,6 +48,11 @@ class LivroService:
     ) -> list[Livro]:
         livros = self.repository.listar(status=status, busca=busca, limite=limite)
         return [Livro.model_validate(livro) for livro in livros]
+
+    def resumo(self) -> ResumoLeitura:
+        contagem = self.repository.contar_por_status()
+        por_status = {status.value: contagem.get(status.value, 0) for status in StatusLeitura}
+        return ResumoLeitura(**por_status, total=sum(por_status.values()))
 
     def obter_livro(self, livro_id: int) -> Livro:
         return Livro.model_validate(self._buscar(livro_id))

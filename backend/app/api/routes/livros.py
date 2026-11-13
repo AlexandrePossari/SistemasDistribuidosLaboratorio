@@ -5,7 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.repositories.livro import LivroRepository
-from app.schemas.livro import Livro, LivroCreate, LivroPatch, LivroUpdate, StatusLeitura
+from app.schemas.livro import (
+    Livro,
+    LivroCreate,
+    LivroPatch,
+    LivroUpdate,
+    ResumoLeitura,
+    StatusLeitura,
+)
 from app.services.livro import LivroService
 
 
@@ -36,6 +43,13 @@ def listar_livros(
 ) -> list[Livro]:
     """Lista os livros, do mais recente para o mais antigo."""
     return service.listar_livros(status=status_leitura, busca=busca, limite=limite)
+
+
+# Declarada antes de /{livro_id}, senao "resumo" seria lido como um id.
+@router.get("/resumo", response_model=ResumoLeitura)
+def resumo_de_leitura(service: Service) -> ResumoLeitura:
+    """Quantidade de livros em cada status, para o resumo da tela inicial."""
+    return service.resumo()
 
 
 @router.get("/{livro_id}", response_model=Livro, responses=ERRO_404)
