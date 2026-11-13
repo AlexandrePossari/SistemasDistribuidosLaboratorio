@@ -31,6 +31,8 @@ services:
     environment:
       # Dentro da rede do compose o banco e acessado pelo nome do servico: "db"
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-biblioteca}
+      # Origens do frontend liberadas no CORS (explicitas; "*" e recusado pela API)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
