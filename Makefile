@@ -14,7 +14,8 @@ PORT := 8000
         test test-v test-unit test-integration \
         migrate migration downgrade db-current db-history \
         front-install front-dev front-build front-preview front-format front-lint \
-        front-test front-test-unit front-test-integration \
+        front-test front-test-unit front-test-integration front-e2e-install front-test-e2e \
+        test-all \
         build up up-build down restart rebuild logs ps sh db-shell health
 
 help:
@@ -53,10 +54,15 @@ help:
 	@echo "  make front-test             - Roda os testes unitarios e de integracao (Vitest)"
 	@echo "  make front-test-unit        - Roda apenas os testes unitarios"
 	@echo "  make front-test-integration - Roda apenas os testes de integracao"
+	@echo "  make front-e2e-install      - Instala o Chromium usado pelo Playwright"
+	@echo "  make front-test-e2e         - Roda os testes E2E (Playwright; exige a stack: make up)"
+	@echo ""
+	@echo " Todos os testes:"
+	@echo "  make test-all         - Sobe a stack e roda backend (Pytest), frontend (Vitest) e E2E"
 	@echo ""
 	@echo " Docker Compose:"
 	@echo "  make build            - Constroi as imagens"
-	@echo "  make up               - Sobe o PostgreSQL e a API em background"
+	@echo "  make up               - Sobe PostgreSQL, API e frontend em background"
 	@echo "  make up-build         - Reconstroi as imagens e sobe tudo em background"
 	@echo "  make down             - Derruba os containers (os dados ficam no volume)"
 	@echo "  make restart          - Reinicia os servicos"
@@ -142,6 +148,20 @@ front-test-unit:
 
 front-test-integration:
 	cd $(FRONTEND_DIR) && $(NPM) run test:integration
+
+front-e2e-install:
+	cd $(FRONTEND_DIR) && $(NPM) run test:e2e:install
+
+front-test-e2e:
+	cd $(FRONTEND_DIR) && $(NPM) run test:e2e
+
+# Sobe a stack e espera ela ficar saudavel: o PostgreSQL atende o Pytest, e a API e o
+# frontend do compose atendem o Playwright. Depois roda todas as suites em sequencia.
+test-all:
+	$(COMPOSE) up -d --build --wait
+	$(MAKE) test
+	$(MAKE) front-test
+	$(MAKE) front-test-e2e
 
 build:
 	$(COMPOSE) build
