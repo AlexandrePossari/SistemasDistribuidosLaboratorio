@@ -31,8 +31,11 @@ services:
     environment:
       # Dentro da rede do compose o banco e acessado pelo nome do servico: "db"
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-biblioteca}
-      # Origens do frontend liberadas no CORS (explicitas; "*" e recusado pela API)
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      # Origens do frontend liberadas no CORS (explicitas; "*" e recusado pela API).
+      # Sem CORS_ORIGINS no .env, segue a porta publicada do frontend.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173}}
+      # Fuso usado para a data de conclusao ("hoje"); sem ele o container usaria UTC
+      TZ: ${TZ:-America/Sao_Paulo}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
@@ -48,6 +51,34 @@ services:
       start_period: 10s
     depends_on:
       db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: biblioteca-web
+    restart: unless-stopped
+    environment:
+      # URL da API vista pelo NAVEGADOR do usuario (porta publicada da API), e nao o host
+      # "api" da rede do compose: quem chama a API e o navegador, fora dos containers.
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:${BACKEND_PORT:-8000}}
+      # Hot reload do src/ montado como volume
+      VITE_WATCH_POLLING: "true"
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/src
+    healthcheck:
+      # 127.0.0.1: o Vite escuta em IPv4 (0.0.0.0) e "localhost" no Alpine pode virar ::1
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Cascata: o frontend so sobe com a API saudavel, que so sobe com o banco saudavel.
+    depends_on:
+      api:
         condition: service_healthy
 
 volumes:
