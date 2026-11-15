@@ -9,11 +9,12 @@ os livros que você quer ler, está lendo ou já leu, guardar suas notas sobre c
 avaliar os livros concluídos.
 
 A aplicação é composta por uma API em FastAPI, um banco PostgreSQL e um frontend em React,
-executados juntos com Docker Compose.
+executados juntos com Docker Compose:
 
-> Nesta etapa estão prontos o backend (API, banco com migrations, testes e CI) e o
-> frontend em React consumindo a API. O frontend ainda roda fora do Docker (`make
-> front-dev`); o container dele e os testes E2E vêm na próxima etapa.
+```
+navegador  →  frontend (React + Vite)  →  API (FastAPI)  →  PostgreSQL
+              biblioteca-web :5173        biblioteca-api :8000   biblioteca-db :5432
+```
 
 ## Funcionalidades
 
@@ -64,7 +65,7 @@ pelo banco, com CHECK constraints e um índice único em `lower(titulo), lower(a
 | Dependências | Poetry |
 | Qualidade | Ruff (lint e formatação) |
 | Frontend | React 19 (JavaScript), Vite, Tailwind CSS v4 |
-| Testes | Pytest + TestClient (backend), Vitest + Testing Library + jsdom (frontend) |
+| Testes | Pytest + TestClient (backend), Vitest + Testing Library + jsdom (frontend), Playwright (E2E) |
 | Qualidade do frontend | Biome (lint e formatação) |
 | Infraestrutura | Docker, Docker Compose, Makefile |
 | CI | GitHub Actions |
@@ -108,11 +109,14 @@ pelo banco, com CHECK constraints e um índice único em `lower(titulo), lower(a
 │   │   └── utils/               # Validação do formulário e formatação (funções puras)
 │   ├── tests/
 │   │   ├── unit/                # Funções, serviços (fetch mockado) e componentes isolados
-│   │   └── integration/         # A página inteira com o serviço de livros mockado
+│   │   ├── integration/         # A página inteira com o serviço de livros mockado
+│   │   └── e2e/                 # Playwright: navegador -> frontend -> API -> PostgreSQL
 │   ├── package.json             # Dependências e scripts npm
 │   ├── vite.config.js           # Vite, plugins React/Tailwind e configuração do Vitest
-│   └── biome.json               # Regras de lint e formatação
-├── docker-compose.yml           # PostgreSQL + API
+│   ├── playwright.config.js     # Navegador e servidores usados nos testes E2E
+│   ├── biome.json               # Regras de lint e formatação
+│   └── Dockerfile
+├── docker-compose.yml           # PostgreSQL + API + frontend
 ├── .env.example                 # Variáveis de ambiente de exemplo
 └── Makefile                     # Comandos de execução, testes e manutenção
 ```
@@ -151,16 +155,25 @@ cp .env.example .env
 | `POSTGRES_DB` | `biblioteca` | Banco da aplicação |
 | `POSTGRES_PORT` | `5432` | Porta do PostgreSQL publicada na máquina |
 | `BACKEND_PORT` | `8000` | Porta da API publicada na máquina |
+| `FRONTEND_PORT` | `5173` | Porta do frontend publicada na máquina |
+| `TZ` | `America/Sao_Paulo` | Fuso da API: define o "hoje" da data de conclusão dos livros lidos |
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/biblioteca` | Conexão da API quando ela roda fora do Docker |
 | `TEST_DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/biblioteca_test` | Banco dos testes de integração |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Origens que o navegador pode usar para chamar a API, separadas por vírgula. `*` é recusado |
+| `CORS_ORIGINS` (opcional) | `http://localhost:${FRONTEND_PORT}` e `http://127.0.0.1:${FRONTEND_PORT}` | Origens que o navegador pode usar para chamar a API, separadas por vírgula. `*` é recusado |
+| `VITE_API_URL` (opcional) | `http://localhost:${BACKEND_PORT}` | URL da API usada pelo frontend |
 
-O frontend tem o seu próprio exemplo, `frontend/.env.example`, com `VITE_API_URL`
-(padrão `http://localhost:8000`): a URL da API como o **navegador** a enxerga.
+`VITE_API_URL` é a URL da API **como o navegador a enxerga**. Quem chama a API é o
+navegador, na máquina do usuário e fora da rede do Compose, por isso a URL usa
+`localhost` e a porta publicada, e não o host `api`.
 
-Dentro do Docker Compose, a API recebe `DATABASE_URL` apontando para o serviço `db`.
-Se alguma porta já estiver em uso por outro projeto, troque `POSTGRES_PORT` ou
-`BACKEND_PORT` no `.env` (e ajuste a porta nas URLs de conexão).
+Dentro do Docker Compose, a API recebe `DATABASE_URL` apontando para o serviço `db`. Se
+alguma porta já estiver em uso por outro projeto, troque `POSTGRES_PORT`, `BACKEND_PORT`
+ou `FRONTEND_PORT` no `.env`. `CORS_ORIGINS` e `VITE_API_URL` acompanham as portas
+automaticamente. Fora do Docker, ajuste também a porta em `DATABASE_URL` e
+`TEST_DATABASE_URL`.
+
+Para rodar o frontend fora do Docker, ele tem o seu próprio exemplo,
+`frontend/.env.example`, com `VITE_API_URL`.
 
 O `.env` não é versionado; o `.env.example` contém apenas valores de desenvolvimento.
 
@@ -169,26 +182,35 @@ O `.env` não é versionado; o `.env.example` contém apenas valores de desenvol
 ### Com Docker Compose (recomendado)
 
 ```bash
-make up-build   # constrói a imagem da API e sobe PostgreSQL + API
+make up-build   # constrói as imagens e sobe PostgreSQL, API e frontend
 make ps         # status dos containers
 make logs       # acompanha os logs
 make down       # derruba os containers (os dados continuam no volume)
 ```
 
+Depois de subir, a aplicação fica em **http://localhost:5173**.
+
 | Serviço | Container | Endereço |
 |---------|-----------|----------|
 | `db` | `biblioteca-db` | PostgreSQL em `localhost:5432` |
-| `api` | `biblioteca-api` | API em http://localhost:8000 |
+| `api` | `biblioteca-api` | API em http://localhost:8000 (Swagger em `/docs`) |
+| `web` | `biblioteca-web` | Frontend em http://localhost:5173 |
 
-A API só inicia depois que o PostgreSQL passa no healthcheck. Ao subir, o container da API
-executa `alembic upgrade head` antes do Uvicorn, então o banco sempre está com todas as
-migrations aplicadas. O próprio container da API tem um healthcheck que consulta o
-`/health`. Os dados ficam no volume e continuam lá depois de reiniciar ou recriar os
-containers. O Compose usa o nome de projeto
-`minha-biblioteca`, então containers, rede e o volume `biblioteca_dados` são próprios
-deste projeto.
+Os serviços sobem em cascata, cada um esperando o healthcheck do anterior: a API só
+inicia com o PostgreSQL saudável, e o frontend só com o `/health` da API respondendo.
 
-### Frontend
+- **API:** ao subir, executa `alembic upgrade head` antes do Uvicorn, então o banco
+  sempre está com todas as migrations aplicadas.
+- **Frontend:** roda o servidor do Vite com `frontend/src` montado como volume.
+  `VITE_WATCH_POLLING` liga o polling de arquivos, para o hot reload funcionar também no
+  Windows e no macOS.
+- **Dados:** ficam no volume `biblioteca_dados` e continuam lá depois de reiniciar ou
+  recriar os containers.
+
+O Compose usa o nome de projeto `minha-biblioteca`, então containers, rede e volume são
+próprios deste projeto.
+
+### Frontend fora do Docker
 
 ```bash
 make up                                  # a API e o banco precisam estar no ar
@@ -196,6 +218,9 @@ cp frontend/.env.example frontend/.env   # VITE_API_URL=http://localhost:8000
 make front-install                       # npm ci
 make front-dev                           # Vite em http://localhost:5173
 ```
+
+Como o container `biblioteca-web` também usa a porta 5173, pare-o antes
+(`docker compose stop web`).
 
 Para gerar e servir o build de produção: `make front-build` e `make front-preview`.
 
@@ -225,8 +250,8 @@ título + autor.
 
 ## Acessando a API
 
-A interface fica em http://localhost:5173 (com `make front-dev`) e a documentação
-interativa da API (Swagger) em http://localhost:8000/docs.
+A interface fica em http://localhost:5173 e a documentação interativa da API (Swagger)
+em http://localhost:8000/docs.
 
 | Método | Rota | Uso | Respostas |
 |--------|------|-----|-----------|
@@ -372,6 +397,42 @@ make front-test-unit          # só os unitários
 make front-test-integration   # só os de integração
 ```
 
+### E2E (Playwright)
+
+Os testes E2E ficam em [frontend/tests/e2e/](frontend/tests/e2e/) (`nome.spec.js`) e usam
+a **aplicação real**: navegador (Chromium) → frontend → API → PostgreSQL. Eles cobrem:
+
+- a página abrindo com o resumo e a lista vindos da API;
+- o CRUD completo pela interface: adicionar, buscar, editar e excluir com confirmação;
+- a regra de leitura: marcar como Lido, avaliar, **recarregar a página** e conferir que
+  a avaliação continua no banco, e depois voltar para Lendo e ver a avaliação sumir;
+- o erro 409 devolvido pela API ao repetir título e autor;
+- a validação do formulário, sem nenhuma chamada à API;
+- a mensagem de API fora do ar (simulada com `page.route`) e a recuperação com "Tentar
+  novamente".
+
+Cada teste usa um prefixo único no título (`E2E-...`) e apaga pela API o que cadastrou, então
+os livros que já estão no banco não são afetados.
+
+```bash
+make front-e2e-install   # uma vez: baixa o Chromium do Playwright
+make up                  # a stack precisa estar no ar
+make front-test-e2e
+```
+
+Localmente, o Playwright reaproveita a API e o frontend que estão rodando no Docker
+Compose. No CI, ele mesmo sobe a API (Poetry) e o Vite (`webServer` em
+`playwright.config.js`). O relatório HTML fica em `frontend/playwright-report/`.
+
+### Todos os testes em um comando
+
+```bash
+make test-all
+```
+
+Sobe a stack com `docker compose up -d --build --wait` (esperando os healthchecks) e roda
+em sequência os testes do backend (Pytest), do frontend (Vitest) e os E2E (Playwright).
+
 ## CI (GitHub Actions)
 
 ### Backend
@@ -394,12 +455,17 @@ próprio workflow mudar.
 ### Frontend
 
 O workflow [.github/workflows/ci-frontend.yml](.github/workflows/ci-frontend.yml) roda em
-**push** e **pull request** para qualquer branch, sempre que algo em `frontend/` ou o
-próprio workflow mudar. Os dois jobs usam Node.js 26 com cache do npm e `npm ci`.
+**push** e **pull request** para qualquer branch, sempre que algo em `frontend/`, em
+`backend/` (os E2E usam a API real) ou o próprio workflow mudar. Os jobs usam Node.js 26
+com cache do npm e `npm ci`.
 
 **Lint e formatação (Biome):** `npm run check` (lint, formatação e ordem dos imports).
 
-**Testes e build**, que só rodam se o lint passar (`needs: lint`): testes unitários,
-testes de integração e `npm run build`.
+Depois do lint (`needs: lint`), rodam em paralelo:
+
+- **Testes (Vitest) e build:** testes unitários, testes de integração e `npm run build`;
+- **Testes E2E:** com um PostgreSQL 16 como *service container*, instala o backend com
+  Poetry, aplica as migrations, instala o Chromium e roda o Playwright, que sobe a API e o
+  Vite. O relatório do Playwright é publicado como artefato.
 
 Rode `make help` para ver todos os comandos.
