@@ -48,10 +48,16 @@ jobs:
         run: poetry run ruff format --check .
 
   tests:
-    name: Testes (Pytest + PostgreSQL)
+    # O nome "Testes (Python 3.12)" e o check exigido pela regra (ruleset) da branch main.
+    name: Testes (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     # Os testes so rodam se o lint e a formatacao passarem.
     needs: lint
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
 
     services:
       postgres:
@@ -83,10 +89,10 @@ jobs:
       - name: Instala o Poetry
         run: pipx install poetry==2.4.1
 
-      - name: Configura o Python 3.12
+      - name: Configura o Python ${{ matrix.python-version }}
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: poetry
           cache-dependency-path: backend/poetry.lock
 
