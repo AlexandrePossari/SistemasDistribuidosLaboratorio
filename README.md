@@ -18,7 +18,7 @@ navegador  →  frontend (React + Vite)  →  API (FastAPI)  →  PostgreSQL
 
 ## Vídeo demonstrativo
 
-▶️ **Link do vídeo:** 
+▶️ **Link do vídeo:** https://youtu.be/WNzOwJQzjKs
 
 ## Início rápido
 
