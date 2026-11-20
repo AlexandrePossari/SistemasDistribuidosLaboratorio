@@ -16,6 +16,31 @@ navegador  →  frontend (React + Vite)  →  API (FastAPI)  →  PostgreSQL
               biblioteca-web :5173        biblioteca-api :8000   biblioteca-db :5432
 ```
 
+## Vídeo demonstrativo
+
+▶️ **Link do vídeo:** 
+
+## Início rápido
+
+Com Docker, Make, Python 3.12 + Poetry e Node.js instalados (veja os
+[pré-requisitos](#pré-requisitos)):
+
+```bash
+cp .env.example .env     # variáveis de ambiente (valores de desenvolvimento)
+make up-build            # sobe PostgreSQL, API e frontend
+```
+
+Abra **http://localhost:5173**. A API e o Swagger ficam em http://localhost:8000/docs.
+
+Para rodar todos os testes (backend, frontend e E2E):
+
+```bash
+make install             # dependências do backend (Poetry)
+make front-install       # dependências do frontend (npm)
+make front-e2e-install   # Chromium do Playwright
+make test-all            # sobe a stack e roda Pytest, Vitest e Playwright
+```
+
 ## Funcionalidades
 
 - Cadastrar livros com título, autor e notas.
@@ -76,7 +101,7 @@ pelo banco, com CHECK constraints e um índice único em `lower(titulo), lower(a
 .
 ├── .github/workflows/
 │   ├── ci-backend.yml           # CI do backend: lint e testes
-│   └── ci-frontend.yml          # CI do frontend: lint, testes e build
+│   └── ci-frontend.yml          # CI do frontend: lint, testes, build e E2E
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # Cria a aplicação FastAPI, routers e tratadores de erro
@@ -118,6 +143,7 @@ pelo banco, com CHECK constraints e um índice único em `lower(titulo), lower(a
 │   └── Dockerfile
 ├── docker-compose.yml           # PostgreSQL + API + frontend
 ├── .env.example                 # Variáveis de ambiente de exemplo
+├── .gitattributes               # Finais de linha LF em qualquer sistema operacional
 └── Makefile                     # Comandos de execução, testes e manutenção
 ```
 
@@ -136,10 +162,14 @@ rota (api/routes)  →  service (services)  →  repository (repositories)  → 
 ## Pré-requisitos
 
 - Docker e Docker Compose
-- Make
-- Node.js 22.12+ e npm (frontend)
-- Para rodar o backend e os testes fora do Docker: Python 3.12 e
-  [Poetry](https://python-poetry.org/docs/#installation) 2.x
+- Make. No Windows, pode ser instalado com `winget install ezwinports.make`
+- Python 3.12 e [Poetry](https://python-poetry.org/docs/#installation) 2.x, para os
+  testes do backend e para rodar a API fora do Docker
+- Node.js 22.12+ e npm, para os testes do frontend (Vitest e Playwright) e para rodar o
+  frontend fora do Docker
+
+Só para subir a aplicação (`make up-build`) basta o Docker com o Compose e o Make. Os
+testes rodam na máquina e usam o PostgreSQL, a API e o frontend dos containers.
 
 ## Variáveis de ambiente
 
@@ -227,10 +257,10 @@ Para gerar e servir o build de produção: `make front-build` e `make front-prev
 ### API fora do Docker
 
 ```bash
-make up         # garante o PostgreSQL rodando
-make install    # instala as dependências com Poetry
-make migrate    # aplica as migrations no banco de DATABASE_URL
-make dev        # API com reload em http://localhost:8000
+docker compose up -d db   # só o PostgreSQL (o container da API também usaria a porta 8000)
+make install              # instala as dependências com Poetry
+make migrate              # aplica as migrations no banco de DATABASE_URL
+make dev                  # API com reload em http://localhost:8000
 ```
 
 ## Migrations (Alembic)
@@ -295,6 +325,10 @@ curl -X POST http://localhost:8000/livros \
 Os erros seguem o formato do FastAPI: `{"detail": "Livro 7 não encontrado"}`. Nos erros de
 validação (422), `detail` traz a lista de campos inválidos.
 
+```bash
+make health     # consulta o /health: {"status": "ok", "banco": "ok"}
+```
+
 ### CORS
 
 O frontend (porta 5173) e a API (porta 8000) são origens diferentes, então o navegador só
@@ -326,10 +360,6 @@ O formulário repete as validações do backend (campos obrigatórios, tamanhos,
 em livro lido) para não enviar dados que a API recusaria, mas a validação que vale é a da
 API. Depois de cada alteração, a lista e o resumo são buscados de novo, para a tela
 mostrar exatamente o que está no banco.
-
-```bash
-make health     # curl em /health
-```
 
 ## Qualidade de código
 
@@ -369,6 +399,7 @@ Cada teste recebe o marker `unit` ou `integration` de acordo com a pasta, e test
 dessas pastas são recusados.
 
 ```bash
+make install            # uma vez: dependências do backend
 make up                 # os testes de integração precisam do PostgreSQL
 make test               # todos os testes
 make test-unit          # só os unitários (não precisam de banco)
@@ -392,6 +423,7 @@ Os testes ficam em [frontend/tests/](frontend/tests/) e seguem o padrão `nome.t
   edição, ações rápidas, exclusão e as mensagens de erro da API (404, 409 e 422).
 
 ```bash
+make front-install            # uma vez: dependências do frontend
 make front-test               # unitários + integração
 make front-test-unit          # só os unitários
 make front-test-integration   # só os de integração
