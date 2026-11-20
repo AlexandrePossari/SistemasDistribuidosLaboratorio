@@ -1,0 +1,9 @@
+# Arquivos de texto sempre com final de linha LF, em qualquer sistema operacional.
+# Sem isso, o Git no Windows (core.autocrlf=true) troca para CRLF no checkout e o Biome
+# acusa erro de formatacao, alem de scripts e Dockerfiles poderem quebrar nos containers.
+* text=auto eol=lf
+
+# Binarios: nunca converter
+*.png binary
+*.jpg binary
+*.ico binary
